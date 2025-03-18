@@ -1,4 +1,3 @@
-```markdown
 # Online Song Library API
 
 ## Описание
@@ -43,12 +42,6 @@
 ## Запуск
 
 **1. Клонируйте репозиторий:**
-
-```bash
-git clone <your_repository_url>
-cd <your_repository_directory>
-```
-
 **2. Настройте .env файл:**
 
 Создайте файл `.env` в корневом каталоге проекта и заполните его необходимыми параметрами (см. `.env.example`):
