@@ -1,4 +1,3 @@
-// internal/musicapi/musicapi.go
 package musicapi
 
 import (
@@ -12,6 +11,12 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:generate mockgen -destination=mocks/mock_musicapi.go -package=mocks songlibrary/internal/musicapi MusicAPI
+
+type MusicAPI interface {
+	GetSongDetailsFromAPI(group string, song string) (*models.SongDetailFromAPI, error)
+}
+
 type MusicAPIClient struct {
 	baseURL string
 	client  *http.Client
@@ -24,7 +29,7 @@ func NewMusicAPIClient(baseURL string) *MusicAPIClient {
 	}
 }
 
-func (api *MusicAPIClient) GetSongDetailsFromAPI(group, song string) (*models.SongDetailFromAPI, error) {
+func (api *MusicAPIClient) GetSongDetailsFromAPI(group string, song string) (*models.SongDetailFromAPI, error) {
 	apiURL := api.baseURL
 	if apiURL == "" {
 		return nil, fmt.Errorf("API_URL not configured in .env file")

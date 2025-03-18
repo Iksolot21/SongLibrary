@@ -29,18 +29,17 @@ func LoadConfig() (*Config, error) {
 	serverPortStr := os.Getenv("SERVER_PORT")
 	serverPort, err := strconv.Atoi(serverPortStr)
 	if err != nil {
-		serverPort = 8080 // Default port if not set or invalid
+		serverPort = 8080
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		// Fallback to individual DB parameters if DATABASE_URL is not set (for local development without Docker Compose)
 		dbHost := os.Getenv("DB_HOST")
 		dbPortStr := os.Getenv("DB_PORT")
-		var dbPort int // Объявление dbPort ВНЕ блока if
+		var dbPort int
 		dbPort, err = strconv.Atoi(dbPortStr)
 		if err != nil {
-			dbPort = 5432 // Default PostgreSQL port
+			dbPort = 5432
 		}
 		dbUser := os.Getenv("DB_USER")
 		dbPassword := os.Getenv("DB_PASSWORD")

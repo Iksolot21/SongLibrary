@@ -1,17 +1,19 @@
-// internal/models/song.go
 package models
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
 type Song struct {
-	ID          int       `json:"id"`
-	GroupName   string    `json:"group"`
-	SongName    string    `json:"song"`
-	ReleaseDate *string   `json:"releaseDate"`
-	Text        *string   `json:"text"`
-	Link        *string   `json:"link"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          int            `json:"id"`
+	GroupName   string         `json:"group"`
+	SongName    string         `json:"song"`
+	ReleaseDate sql.NullString `json:"releaseDate"`
+	Text        sql.NullString `json:"text"`
+	Link        sql.NullString `json:"link"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
 }
 
 type SongDetailFromAPI struct {

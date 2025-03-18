@@ -8,13 +8,13 @@ import (
 
 var Logger *zap.Logger
 
-func InitLogger() error { // Исправлено: returns error
+func InitLogger() error {
 	config := zap.NewDevelopmentConfig()
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	logger, err := config.Build()
 	if err != nil {
-		return err // Return error
+		return err
 	}
 	Logger = logger
-	return nil // Return nil on success
+	return nil
 }

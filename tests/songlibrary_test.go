@@ -4,6 +4,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -26,7 +27,7 @@ import (
 	"songlibrary/internal/models"
 	"songlibrary/internal/musicapi"
 	"songlibrary/internal/service"
-	"songlibrary/internal/storage" // Correct import for storage interface and errors
+	"songlibrary/internal/storage"
 	"songlibrary/internal/storage/postgres"
 )
 
@@ -34,26 +35,26 @@ var (
 	testDBConnStr  string
 	testServer     *httptest.Server
 	testRouter     *mux.Router
-	pgStorage      storage.SongStorage // Corrected type to interface
+	pgStorage      storage.SongStorage
 	musicAPIClient *musicapi.MusicAPIClient
 	songHandlers   *songs.SongHandlers
-	songService    *service.SongService // Added declaration for songService
+	songService    *service.SongService
 )
 
 func setupTestEnvironment(t *testing.T) func() {
-	godotenv.Load("../.env") // Load .env from parent directory for tests
+	godotenv.Load("../.env")
 
 	cfg, err := config.LoadConfig()
 	require.NoError(t, err, "Failed to load config")
 
 	testDBConnStr = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName+"_test") // Use test DB
+		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName+"_test")
 
 	conn, err := pgx.Connect(context.Background(), testDBConnStr)
 	require.NoError(t, err, "Failed to connect to test database")
 
-	pgStorage = postgres.NewPgStorage(conn)                 // Correct assignment - pgStorage is storage.SongStorage now
-	musicAPIClient = musicapi.NewMusicAPIClient(cfg.APIURL) // Or mock API client if needed for isolation
+	pgStorage = postgres.NewPgStorage(conn)
+	musicAPIClient = musicapi.NewMusicAPIClient(cfg.APIURL)
 	songService = service.NewSongService(pgStorage, musicAPIClient)
 	songHandlers = songs.NewSongHandlers(songService)
 
@@ -192,7 +193,7 @@ func TestDeleteSongHandler_Integration(t *testing.T) {
 
 	// Verify song is deleted from DB
 	_, err := pgStorage.GetByID(context.Background(), testSong.ID)
-	assert.ErrorIs(t, err, storage.ErrSongNotFound, "Expected song to be deleted") // Corrected to storage.ErrSongNotFound
+	assert.ErrorIs(t, err, storage.ErrSongNotFound, "Expected song to be deleted")
 }
 
 func addTestData(t *testing.T) []models.Song {
@@ -203,7 +204,7 @@ func addTestData(t *testing.T) []models.Song {
 	addedSongs := make([]models.Song, len(songsToAdd))
 
 	for i, song := range songsToAdd {
-		addedSong, err := pgStorage.Create(context.Background(), &song)
+		addedSong, err := pgStorage.Create(context.Background(), &song, nil)
 		require.NoError(t, err, "Failed to add test song to DB")
 		addedSongs[i] = *addedSong
 	}
@@ -211,14 +212,14 @@ func addTestData(t *testing.T) []models.Song {
 }
 
 func addTestDataWithText(t *testing.T) models.Song {
-	songToAdd := models.Song{GroupName: "Text Group", SongName: "Text Song", Text: stringPointer("Test Song Text")}
-	addedSong, err := pgStorage.Create(context.Background(), &songToAdd)
+	songToAdd := models.Song{
+		GroupName: "Text Group",
+		SongName:  "Text Song",
+		Text:      sql.NullString{String: "Test Song Text", Valid: true},
+	}
+	addedSong, err := pgStorage.Create(context.Background(), &songToAdd, nil)
 	require.NoError(t, err, "Failed to add test song with text to DB")
 	return *addedSong
-}
-
-func stringPointer(s string) *string {
-	return &s
 }
 
 func TestMain(m *testing.M) {
