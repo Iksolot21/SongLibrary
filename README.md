@@ -153,7 +153,8 @@ API предоставляет следующие методы:
 Чтобы запустить unit тесты, используйте следующую команду в корневой директории проекта:
 
 ```bash
-go test ./internal/...
+go test songlibrary/internal/api/handlers/songs
+go test songlibrary/internal/service
 ```
 
 ### Интеграционные тесты
@@ -183,4 +184,3 @@ go test -v -tags=integration songlibrary/tests
 
 *   **`app`**: Сервис API приложения, собранный из Dockerfile в проекте. Он предоставляет порт `8080` и зависит от сервиса `db`.
 *   **`db`**: Сервис базы данных PostgreSQL, использующий образ `postgres:15-alpine`. Он предоставляет порт `5432` (отображается на порт хост-машины `5433`) и использует том `postgres_data` для постоянного хранения.
-```
