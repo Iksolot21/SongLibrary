@@ -1,4 +1,3 @@
-// internal/models/pagination.go
 package models
 
 type Pagination struct {

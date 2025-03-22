@@ -155,7 +155,6 @@ func TestAddSongHandler_Integration(t *testing.T) {
 	assert.Equal(t, "Integration Test Group", song.GroupName)
 	assert.Equal(t, "Integration Test Song", song.SongName)
 
-	// Verify song exists in DB
 	fetchedSong, err := pgStorage.GetByID(context.Background(), song.ID)
 	require.NoError(t, err, "Failed to fetch song from DB")
 	assert.Equal(t, song.GroupName, fetchedSong.GroupName)
@@ -166,7 +165,6 @@ func TestGetSongTextHandler_Integration(t *testing.T) {
 	teardown := setupTestEnvironment(t)
 	defer teardown()
 
-	// Add test data with text
 	testSong := addTestDataWithText(t)
 
 	recorder := executeRequest(t, "GET", "/songs/"+strconv.Itoa(testSong.ID)+"/text", "")
@@ -182,7 +180,6 @@ func TestUpdateSongHandler_Integration(t *testing.T) {
 	teardown := setupTestEnvironment(t)
 	defer teardown()
 
-	// Add test data to update
 	testSong := addTestData(t)[0]
 	updatedGroupName := "Updated Group Name"
 	updatedSongName := "Updated Song Name"
@@ -197,7 +194,6 @@ func TestUpdateSongHandler_Integration(t *testing.T) {
 	assert.Equal(t, updatedGroupName, updatedSong.GroupName)
 	assert.Equal(t, updatedSongName, updatedSong.SongName)
 
-	// Verify song is updated in DB
 	fetchedSong, err := pgStorage.GetByID(context.Background(), testSong.ID)
 	require.NoError(t, err, "Failed to fetch song from DB")
 	assert.Equal(t, updatedGroupName, fetchedSong.GroupName)
@@ -208,13 +204,11 @@ func TestDeleteSongHandler_Integration(t *testing.T) {
 	teardown := setupTestEnvironment(t)
 	defer teardown()
 
-	// Add test data to delete
 	testSong := addTestData(t)[0]
 
 	recorder := executeRequest(t, "DELETE", "/songs/"+strconv.Itoa(testSong.ID), "")
 	assert.Equal(t, http.StatusNoContent, recorder.Code)
 
-	// Verify song is deleted from DB
 	_, err := pgStorage.GetByID(context.Background(), testSong.ID)
 	assert.ErrorIs(t, err, storage.ErrSongNotFound, "Expected song to be deleted")
 }

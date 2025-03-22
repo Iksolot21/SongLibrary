@@ -22,7 +22,6 @@ func NewPgStorage(conn *pgx.Conn) storage.SongStorage {
 	return &PgStorage{conn: conn}
 }
 
-// BeginTx starts a new transaction.
 func (s *PgStorage) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	db, err := sql.Open("pgx", s.conn.Config().ConnString())
 	if err != nil {
@@ -35,7 +34,6 @@ func (s *PgStorage) BeginTx(ctx context.Context) (*sql.Tx, error) {
 	return tx, nil
 }
 
-// Create creates a new song.
 func (s *PgStorage) Create(ctx context.Context, song *models.Song, tx *sql.Tx) (*models.Song, error) {
 	var query string
 	var addedSong models.Song

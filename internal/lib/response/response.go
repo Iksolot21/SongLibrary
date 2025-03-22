@@ -1,4 +1,3 @@
-// internal/lib/response/response.go
 package response
 
 import (
@@ -6,7 +5,6 @@ import (
 	"net/http"
 )
 
-// JSON writes a JSON response with the given status code and data.
 func JSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -16,7 +14,6 @@ func JSON(w http.ResponseWriter, statusCode int, data interface{}) {
 	}
 }
 
-// Error writes an error JSON response with the given status code and error message.
 func Error(w http.ResponseWriter, statusCode int, message string) {
 	type errResponse struct {
 		Error string `json:"error"`

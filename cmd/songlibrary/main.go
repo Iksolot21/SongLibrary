@@ -1,4 +1,3 @@
-// cmd/songlibrary/main.go
 package main
 
 import (
@@ -44,7 +43,7 @@ func main() {
 	utils.Logger.Info("Starting Song Library API")
 
 	// 2. Загрузка конфигурации
-	godotenv.Load() // Загрузка .env файла
+	godotenv.Load()
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		utils.Logger.Fatal("Config load failed", zap.Error(err))
@@ -86,7 +85,7 @@ func main() {
 	router.HandleFunc("/songs/{id}", songHandlers.UpdateSongHandler).Methods("PUT")
 	router.HandleFunc("/songs/{id}", songHandlers.DeleteSongHandler).Methods("DELETE")
 
-	// Swagger documentation
+	// Регистрация Swagger UI
 	router.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	// 7. Запуск сервера

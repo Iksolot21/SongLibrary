@@ -21,7 +21,6 @@ var (
 	ErrExternalAPI = errors.New("external API error")
 )
 
-// SongService interface defines the methods for song operations.
 type SongService interface {
 	AddSong(ctx context.Context, req *models.AddSongRequest) (*models.Song, error)
 	GetSongs(ctx context.Context, filter *models.SongFilter, pagination *models.Pagination) ([]models.Song, error)
@@ -30,16 +29,13 @@ type SongService interface {
 	DeleteSong(ctx context.Context, id int) error
 }
 
-// songService is the concrete implementation of SongService interface.
 type songService struct {
 	storage        storage.SongStorage
 	musicAPIClient musicapi.MusicAPI
 }
 
-// NewSongService creates a new SongService instance.
-// It returns the interface SongService, allowing for dependency injection and mocking.
 func NewSongService(storage storage.SongStorage, musicAPIClient musicapi.MusicAPI) SongService {
-	return &songService{ // Return concrete songService instance, but as SongService interface
+	return &songService{
 		storage:        storage,
 		musicAPIClient: musicAPIClient,
 	}
@@ -54,7 +50,6 @@ func (s *songService) AddSong(ctx context.Context, req *models.AddSongRequest) (
 		return nil, fmt.Errorf("SongService.AddSong - GetSongDetailsFromAPI failed: %w", ErrExternalAPI)
 	}
 
-	// Validate data lengths
 	const maxTextLength = 65535
 	if len(songDetails.Text) > maxTextLength {
 		return nil, fmt.Errorf("text length exceeds maximum allowed length (%d)", maxTextLength)
@@ -65,7 +60,6 @@ func (s *songService) AddSong(ctx context.Context, req *models.AddSongRequest) (
 		return nil, fmt.Errorf("releaseDate length exceeds maximum allowed length (%d)", maxReleaseDateLength)
 	}
 
-	// Parse and format releaseDate to YYYY-MM-DD for PostgreSQL DATE type
 	var nullReleaseDate sql.NullString
 	if songDetails.ReleaseDate != "" {
 		parsedTime, parseErr := time.Parse("02.01.2006", songDetails.ReleaseDate)
@@ -123,7 +117,6 @@ func (s *songService) GetSongText(ctx context.Context, id int, pagination *model
 		return nil, fmt.Errorf("SongService.GetSongText - storage.GetByID failed: %w", err)
 	}
 
-	// Implement verse pagination
 	if song.Text.Valid {
 		verses := strings.Split(song.Text.String, "\n\n")
 		startIndex := pagination.GetOffset()

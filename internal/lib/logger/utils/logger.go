@@ -1,4 +1,3 @@
-// internal/lib/logger/utils/logger.go
 package utils
 
 import (
