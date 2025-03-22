@@ -153,7 +153,8 @@ API предоставляет следующие методы:
 Чтобы запустить unit тесты, используйте следующую команду в корневой директории проекта:
 
 ```bash
-go test ./internal/...
+go test songlibrary/internal/api/handlers/songs
+go test songlibrary/internal/service
 ```
 
 ### Интеграционные тесты
