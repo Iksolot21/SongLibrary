@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"songlibrary/internal/lib/logger/utils"
 	"songlibrary/internal/models"
+	"strings"
 
 	"go.uber.org/zap"
 )
@@ -52,6 +53,8 @@ func (api *MusicAPIClient) GetSongDetailsFromAPI(group string, song string) (*mo
 	if apiURL == "" {
 		return nil, fmt.Errorf("API_URL not configured and mock data mode is not active, which should not happen")
 	}
+
+	apiURL = strings.TrimSuffix(apiURL, "/") + "/info"
 
 	u, err := url.Parse(apiURL)
 	if err != nil {
