@@ -24,22 +24,6 @@ API реализует следующие функции:
 *   **Конфигурация через `.env` файл:** Параметры конфигурации (URL базы данных, URL API, порт сервера) загружаются из `.env` файла.
 *   **Swagger API Документация:** Генерирует Swagger/OpenAPI документацию для API, доступную через Swagger UI.
 
-## Используемые технологии
-
-*   **Go:** Язык программирования для backend API.
-*   **PostgreSQL:** Реляционная база данных для хранения данных библиотеки песен.
-*   **Docker & Docker Compose:** Контейнеризация для легкой настройки и развертывания.
-*   **github.com/gorilla/mux:** HTTP роутер для обработки API методов.
-*   **github.com/jackc/pgx/v5:** PostgreSQL драйвер для Go.
-*   **github.com/golang-migrate/migrate/v4:** Инструмент для миграций базы данных.
-*   **github.com/testcontainers/testcontainers-go:** Для интеграционного тестирования с контейнерами Docker.
-*   **github.com/swaggo/swag & github.com/swaggo/http-swagger:** Для генерации и предоставления Swagger API документации.
-*   **go.uber.org/zap:** Библиотека структурированного логирования.
-*   **github.com/joho/godotenv:** Для загрузки переменных окружения из `.env` файлов.
-*   **golang.org/x/exp/slog:** Библиотека структурированного логирования (используется как утилиты для zap logger).
-*   **github.com/golang/mock/gomock:** Фреймворк мокирования для Go тестов.
-*   **github.com/stretchr/testify/assert & github.com/stretchr/testify/require:** Библиотеки утверждений и требований для Go тестов.
-
 ## Начало работы
 
 Чтобы запустить Online Library API локально, выполните следующие шаги:
