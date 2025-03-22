@@ -10,6 +10,7 @@ import (
 	"songlibrary/internal/musicapi"
 	"songlibrary/internal/storage"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -64,7 +65,20 @@ func (s *songService) AddSong(ctx context.Context, req *models.AddSongRequest) (
 		return nil, fmt.Errorf("releaseDate length exceeds maximum allowed length (%d)", maxReleaseDateLength)
 	}
 
-	nullReleaseDate := sql.NullString{String: songDetails.ReleaseDate, Valid: songDetails.ReleaseDate != ""}
+	// Parse and format releaseDate to YYYY-MM-DD for PostgreSQL DATE type
+	var nullReleaseDate sql.NullString
+	if songDetails.ReleaseDate != "" {
+		parsedTime, parseErr := time.Parse("02.01.2006", songDetails.ReleaseDate) // Parse from DD.MM.YYYY
+		if parseErr != nil {
+			utils.Logger.Warn("SongService.AddSong - Failed to parse releaseDate from API, using empty date", zap.Error(parseErr), zap.String("releaseDate", songDetails.ReleaseDate))
+			nullReleaseDate = sql.NullString{String: "", Valid: false} // Use empty date if parsing fails
+		} else {
+			nullReleaseDate = sql.NullString{String: parsedTime.Format("2006-01-02"), Valid: true} // Format to YYYY-MM-DD
+		}
+	} else {
+		nullReleaseDate = sql.NullString{String: "", Valid: false} // Keep empty if no releaseDate from API
+	}
+
 	nullText := sql.NullString{String: songDetails.Text, Valid: songDetails.Text != ""}
 	nullLink := sql.NullString{String: songDetails.Link, Valid: songDetails.Link != ""}
 
