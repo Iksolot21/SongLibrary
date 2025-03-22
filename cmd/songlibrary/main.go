@@ -18,7 +18,7 @@ import (
 	"songlibrary/internal/musicapi"
 	"songlibrary/internal/service"
 	"songlibrary/internal/storage/postgres"
-	_ "songlibrary/swagger"
+	_ "songlibrary/swagger/docs"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"

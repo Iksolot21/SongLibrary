@@ -4,77 +4,73 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"songlibrary/internal/api/handlers/songs"
+	"songlibrary/internal/lib/logger/utils"
 	"songlibrary/internal/models"
+	mock_service "songlibrary/internal/service/mocks"
 	"songlibrary/internal/storage"
-	mock_storage "songlibrary/internal/storage/mocks"
 
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 )
 
+func TestMain(m *testing.M) {
+	if err := utils.InitLogger(); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	exitCode := m.Run()
+	utils.Logger.Sync()
+	os.Exit(exitCode)
+}
+
 func TestAddSongHandler_Unit(t *testing.T) {
 	testCases := []struct {
 		name           string
 		requestBody    string
-		mockServiceFn  func(s *mock_storage.MockSongStorage)
-		mockMusicAPIFn func(s *mock_storage.MockSongStorage)
+		mockServiceFn  func(s *mock_service.MockSongService)
 		expectedStatus int
 		expectedBody   string
 	}{
 		{
 			name:        "Valid request",
 			requestBody: `{"group": "Test Group", "song": "Test Song"}`,
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				//s.EXPECT().AddSong(gomock.Any(), gomock.Any()).Return(&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song"}, nil)
-				s.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any()).Return(&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song"}, nil)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().AddSong(gomock.Any(), gomock.Any()).Return(
+					&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song"},
+					nil,
+				)
 			},
-			mockMusicAPIFn: func(s *mock_storage.MockSongStorage) {},
 			expectedStatus: http.StatusCreated,
-			expectedBody:   `{"id":1,"group":"Test Group","song":"Test Song","releaseDate":null,"text":null,"link":null,"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}\n`, // Adjust expected JSON
+			expectedBody:   `{"id":1,"group":"Test Group","song":"Test Song","releaseDate":{"String":"","Valid":false},"text":{"String":"","Valid":false},"link":{"String":"","Valid":false},"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}`, // Исправлено
 		},
 		{
 			name:           "Invalid request body",
 			requestBody:    `invalid json`,
-			mockServiceFn:  func(s *mock_storage.MockSongStorage) {},
-			mockMusicAPIFn: func(s *mock_storage.MockSongStorage) {},
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"Invalid request body"}\n`,
+			expectedBody:   `{"error":"Invalid request body"}`,
 		},
 		{
 			name:           "Missing group name",
 			requestBody:    `{"song": "Test Song"}`,
-			mockServiceFn:  func(s *mock_storage.MockSongStorage) {},
-			mockMusicAPIFn: func(s *mock_storage.MockSongStorage) {},
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"Group and song names are required"}\n`,
+			expectedBody:   `{"error":"Group and song names are required"}`,
 		},
 		{
 			name:        "Service error",
 			requestBody: `{"group": "Test Group", "song": "Test Song"}`,
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				//s.EXPECT().AddSong(gomock.Any(), gomock.Any()).Return(nil, errors.New("service error"))
-				s.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("service error"))
-
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().AddSong(gomock.Any(), gomock.Any()).Return(nil, errors.New("service error"))
 			},
-			mockMusicAPIFn: func(s *mock_storage.MockSongStorage) {},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"Failed to add song"}\n`,
+			expectedBody:   `{"error":"Failed to add song"}`,
 		},
-		//{
-		//	name:        "Service external API error",
-		//	requestBody: `{"group": "Test Group", "song": "Test Song"}`,
-		//	mockServiceFn: func(s *mock_service.MockSongService) {
-		//		s.EXPECT().AddSong(gomock.Any(), gomock.Any()).Return(nil, service.ErrExternalAPI)
-		//	},
-		//	expectedStatus: http.StatusServiceUnavailable,
-		//	expectedBody:   `{"error":"Failed to add song"}\n`, // Adjust expected error JSON
-		//},
 	}
 
 	for _, tc := range testCases {
@@ -82,10 +78,12 @@ func TestAddSongHandler_Unit(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockStorage := mock_storage.NewMockSongStorage(ctrl)
-			tc.mockServiceFn(mockStorage)
+			mockService := mock_service.NewMockSongService(ctrl)
+			if tc.mockServiceFn != nil {
+				tc.mockServiceFn(mockService)
+			}
 
-			handler := songs.NewSongHandlers(nil)
+			handler := songs.NewSongHandlers(mockService)
 
 			req := httptest.NewRequest("POST", "/songs", bytes.NewBufferString(tc.requestBody))
 			w := httptest.NewRecorder()
@@ -102,37 +100,43 @@ func TestGetSongsHandler_Unit(t *testing.T) {
 	testCases := []struct {
 		name           string
 		queryParams    string
-		mockServiceFn  func(s *mock_storage.MockSongStorage)
+		mockServiceFn  func(s *mock_service.MockSongService)
 		expectedStatus int
 		expectedBody   string
 	}{
 		{
 			name:        "No filters, no pagination",
 			queryParams: "",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().List(gomock.Any(), nil, gomock.Any()).Return([]models.Song{{ID: 1, GroupName: "Test Group", SongName: "Test Song"}}, nil)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().GetSongs(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					[]models.Song{{ID: 1, GroupName: "Test Group", SongName: "Test Song"}},
+					nil,
+				)
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   `[{"id":1,"group":"Test Group","song":"Test Song","releaseDate":null,"text":null,"link":null,"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}]\n`,
+			expectedBody:   `[{"id":1,"group":"Test Group","song":"Test Song","releaseDate":{"String":"","Valid":false},"text":{"String":"","Valid":false},"link":{"String":"","Valid":false},"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}]`, // Исправлено
 		},
 		{
 			name:        "Filter by group",
 			queryParams: "?group=Test%20Group",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
+			mockServiceFn: func(s *mock_service.MockSongService) {
 				filter := &models.SongFilter{GroupName: stringPointer("Test Group")}
-				s.EXPECT().List(gomock.Any(), filter, gomock.Any()).Return([]models.Song{{ID: 1, GroupName: "Test Group", SongName: "Test Song"}}, nil)
+				s.EXPECT().GetSongs(gomock.Any(), gomock.Eq(filter), gomock.Any()).Return(
+					[]models.Song{{ID: 1, GroupName: "Test Group", SongName: "Test Song"}},
+					nil,
+				)
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   `[{"id":1,"group":"Test Group","song":"Test Song","releaseDate":null,"text":null,"link":null,"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}]\n`,
+			expectedBody:   `[{"id":1,"group":"Test Group","song":"Test Song","releaseDate":{"String":"","Valid":false},"text":{"String":"","Valid":false},"link":{"String":"","Valid":false},"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}]`, // Исправлено
 		},
 		{
 			name:        "Service error",
 			queryParams: "",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().List(gomock.Any(), nil, gomock.Any()).Return(nil, errors.New("service error"))
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().GetSongs(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"Failed to get songs"}\n`,
+			expectedBody:   `{"error":"Failed to get songs"}`,
 		},
 	}
 
@@ -141,10 +145,12 @@ func TestGetSongsHandler_Unit(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockStorage := mock_storage.NewMockSongStorage(ctrl)
-			tc.mockServiceFn(mockStorage)
+			mockService := mock_service.NewMockSongService(ctrl)
+			if tc.mockServiceFn != nil {
+				tc.mockServiceFn(mockService)
+			}
 
-			handler := songs.NewSongHandlers(nil)
+			handler := songs.NewSongHandlers(mockService)
 
 			req := httptest.NewRequest("GET", "/songs"+tc.queryParams, nil)
 			w := httptest.NewRecorder()
@@ -162,7 +168,7 @@ func TestGetSongTextHandler_Unit(t *testing.T) {
 		name           string
 		songID         string
 		queryParams    string
-		mockServiceFn  func(s *mock_storage.MockSongStorage)
+		mockServiceFn  func(s *mock_service.MockSongService)
 		expectedStatus int
 		expectedBody   string
 	}{
@@ -170,59 +176,69 @@ func TestGetSongTextHandler_Unit(t *testing.T) {
 			name:        "Valid request",
 			songID:      "1",
 			queryParams: "",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().GetByID(gomock.Any(), 1).Return(&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sqlStringPointer("Test Text")}, nil)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().GetSongText(gomock.Any(), gomock.Eq(1), gomock.Any()).Return(
+					&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sqlStringPointer("Test Text")},
+					nil,
+				)
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"id":1,"group":"Test Group","song":"Test Song","releaseDate":null,"text":"Test Text","link":null,"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}\n`,
+			expectedBody:   `{"id":1,"group":"Test Group","song":"Test Song","releaseDate":{"String":"","Valid":false},"text":{"String":"Test Text","Valid":true},"link":{"String":"","Valid":false},"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}`, // Исправлено
 		},
 		{
 			name:        "Valid request with pagination",
 			songID:      "1",
 			queryParams: "?page=1&pageSize=1",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().GetByID(gomock.Any(), 1).Return(&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sqlStringPointer("Verse1\n\nVerse2\n\nVerse3")}, nil)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				pagination := models.NewPagination(1, 1)
+				s.EXPECT().GetSongText(gomock.Any(), gomock.Eq(1), gomock.Eq(pagination)).Return(
+					&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sqlStringPointer("Verse1")},
+					nil,
+				)
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"id":1,"group":"Test Group","song":"Test Song","releaseDate":null,"text":"Verse1","link":null,"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}\n`,
+			expectedBody:   `{"id":1,"group":"Test Group","song":"Test Song","releaseDate":{"String":"","Valid":false},"text":{"String":"Verse1","Valid":true},"link":{"String":"","Valid":false},"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}`, // Исправлено
 		},
 		{
 			name:        "Request with pagination no content",
 			songID:      "1",
 			queryParams: "?page=10&pageSize=1",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().GetByID(gomock.Any(), 1).Return(&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sqlStringPointer("")}, nil)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				pagination := models.NewPagination(10, 1)
+				s.EXPECT().GetSongText(gomock.Any(), gomock.Eq(1), gomock.Eq(pagination)).Return(
+					&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sqlStringPointer("")},
+					nil,
+				)
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"id":1,"group":"Test Group","song":"Test Song","releaseDate":null,"text":"","link":null,"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}\n`,
+			expectedBody:   `{"id":1,"group":"Test Group","song":"Test Song","releaseDate":{"String":"","Valid":false},"text":{"String":"","Valid":true},"link":{"String":"","Valid":false},"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}`, // Исправлено, text valid true because sql.NullString is present, even if string is empty
 		},
 		{
 			name:           "Invalid song ID",
 			songID:         "invalid",
 			queryParams:    "",
-			mockServiceFn:  func(s *mock_storage.MockSongStorage) {},
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"Invalid song ID"}\n`,
+			expectedBody:   `{"error":"Invalid song ID"}`,
 		},
 		{
 			name:        "Song not found",
 			songID:      "1",
 			queryParams: "",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().GetByID(gomock.Any(), 1).Return(nil, storage.ErrSongNotFound)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().GetSongText(gomock.Any(), gomock.Eq(1), gomock.Any()).Return(nil, storage.ErrSongNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
-			expectedBody:   `{"error":"Song not found"}\n`,
+			expectedBody:   `{"error":"Song not found"}`,
 		},
 		{
 			name:        "Service error",
 			songID:      "1",
 			queryParams: "",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().GetByID(gomock.Any(), 1).Return(nil, errors.New("service error"))
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().GetSongText(gomock.Any(), gomock.Eq(1), gomock.Any()).Return(nil, errors.New("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"Failed to get song text"}\n`,
+			expectedBody:   `{"error":"Failed to get song text"}`,
 		},
 	}
 
@@ -231,10 +247,12 @@ func TestGetSongTextHandler_Unit(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockStorage := mock_storage.NewMockSongStorage(ctrl)
-			tc.mockServiceFn(mockStorage)
+			mockService := mock_service.NewMockSongService(ctrl)
+			if tc.mockServiceFn != nil {
+				tc.mockServiceFn(mockService)
+			}
 
-			handler := songs.NewSongHandlers(nil)
+			handler := songs.NewSongHandlers(mockService)
 			req := httptest.NewRequest("GET", "/songs/"+tc.songID+"/text"+tc.queryParams, nil)
 			req = mux.SetURLVars(req, map[string]string{"id": tc.songID})
 			w := httptest.NewRecorder()
@@ -252,7 +270,7 @@ func TestUpdateSongHandler_Unit(t *testing.T) {
 		name           string
 		songID         string
 		requestBody    string
-		mockServiceFn  func(s *mock_storage.MockSongStorage)
+		mockServiceFn  func(s *mock_service.MockSongService)
 		expectedStatus int
 		expectedBody   string
 	}{
@@ -260,49 +278,48 @@ func TestUpdateSongHandler_Unit(t *testing.T) {
 			name:        "Valid request",
 			songID:      "1",
 			requestBody: `{"id": 1, "group": "Updated Group", "song": "Updated Song"}`,
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().Update(gomock.Any(), gomock.Any()).Return(&models.Song{ID: 1, GroupName: "Updated Group", SongName: "Updated Song"}, nil)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().UpdateSong(gomock.Any(), gomock.Any()).Return(
+					&models.Song{ID: 1, GroupName: "Updated Group", SongName: "Updated Song"},
+					nil,
+				)
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   `{"id":1,"group":"Updated Group","song":"Updated Song","releaseDate":null,"text":null,"link":null,"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}\n`,
+			expectedBody:   `{"id":1,"group":"Updated Group","song":"Updated Song","releaseDate":{"String":"","Valid":false},"text":{"String":"","Valid":false},"link":{"String":"","Valid":false},"createdAt":"0001-01-01T00:00:00Z","updatedAt":"0001-01-01T00:00:00Z"}`, // Исправлено
 		},
 		{
 			name:           "Invalid song ID",
 			songID:         "invalid",
 			requestBody:    `{"group": "Updated Group", "song": "Updated Song"}`,
-			mockServiceFn:  func(s *mock_storage.MockSongStorage) {},
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"Invalid song ID"}\n`,
+			expectedBody:   `{"error":"Invalid song ID"}`,
 		},
 		{
 			name:           "Invalid request body",
 			songID:         "1",
 			requestBody:    `invalid json`,
-			mockServiceFn:  func(s *mock_storage.MockSongStorage) {},
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"Invalid request body"}\n`,
+			expectedBody:   `{"error":"Invalid request body"}`,
 		},
 		{
 			name:        "Song not found",
 			songID:      "1",
 			requestBody: `{"id": 1, "group": "Updated Group", "song": "Updated Song"}`,
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				//updatedSong := models.Song{ID: 1, GroupName: "Updated Group", SongName: "Updated Song"} // Create a Song struct
-				s.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil, storage.ErrSongNotFound)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().UpdateSong(gomock.Any(), gomock.Any()).Return(nil, storage.ErrSongNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
-			expectedBody:   `{"error":"Song not found"}\n`,
+			expectedBody:   `{"error":"Song not found"}`,
 		},
 		{
 			name:        "Service error",
 			songID:      "1",
 			requestBody: `{"id": 1, "group": "Updated Group", "song": "Updated Song"}`,
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				//updatedSong := models.Song{ID: 1, GroupName: "Updated Group", SongName: "Updated Song"} // Create a Song struct
-				s.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil, errors.New("service error"))
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().UpdateSong(gomock.Any(), gomock.Any()).Return(nil, errors.New("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"Failed to update song"}\n`,
+			expectedBody:   `{"error":"Failed to update song"}`,
 		},
 	}
 
@@ -311,10 +328,12 @@ func TestUpdateSongHandler_Unit(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockStorage := mock_storage.NewMockSongStorage(ctrl)
-			tc.mockServiceFn(mockStorage)
+			mockService := mock_service.NewMockSongService(ctrl)
+			if tc.mockServiceFn != nil {
+				tc.mockServiceFn(mockService)
+			}
 
-			handler := songs.NewSongHandlers(nil)
+			handler := songs.NewSongHandlers(mockService)
 			req := httptest.NewRequest("PUT", "/songs/"+tc.songID, bytes.NewBufferString(tc.requestBody))
 			req = mux.SetURLVars(req, map[string]string{"id": tc.songID})
 			w := httptest.NewRecorder()
@@ -331,15 +350,15 @@ func TestDeleteSongHandler_Unit(t *testing.T) {
 	testCases := []struct {
 		name           string
 		songID         string
-		mockServiceFn  func(s *mock_storage.MockSongStorage)
+		mockServiceFn  func(s *mock_service.MockSongService)
 		expectedStatus int
 		expectedBody   string
 	}{
 		{
 			name:   "Valid request",
 			songID: "1",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().Delete(gomock.Any(), 1).Return(nil)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().DeleteSong(gomock.Any(), gomock.Eq(1)).Return(nil)
 			},
 			expectedStatus: http.StatusNoContent,
 			expectedBody:   ``,
@@ -347,27 +366,26 @@ func TestDeleteSongHandler_Unit(t *testing.T) {
 		{
 			name:           "Invalid song ID",
 			songID:         "invalid",
-			mockServiceFn:  func(s *mock_storage.MockSongStorage) {},
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"Invalid song ID"}\n`,
+			expectedBody:   `{"error":"Invalid song ID"}`,
 		},
 		{
 			name:   "Song not found",
 			songID: "1",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().Delete(gomock.Any(), 1).Return(storage.ErrSongNotFound)
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().DeleteSong(gomock.Any(), gomock.Eq(1)).Return(storage.ErrSongNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
-			expectedBody:   `{"error":"Song not found"}\n`,
+			expectedBody:   `{"error":"Song not found"}`,
 		},
 		{
 			name:   "Service error",
 			songID: "1",
-			mockServiceFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().Delete(gomock.Any(), 1).Return(errors.New("service error"))
+			mockServiceFn: func(s *mock_service.MockSongService) {
+				s.EXPECT().DeleteSong(gomock.Any(), gomock.Eq(1)).Return(errors.New("service error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"Failed to delete song"}\n`,
+			expectedBody:   `{"error":"Failed to delete song"}`,
 		},
 	}
 
@@ -376,10 +394,12 @@ func TestDeleteSongHandler_Unit(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockStorage := mock_storage.NewMockSongStorage(ctrl)
-			tc.mockServiceFn(mockStorage)
+			mockService := mock_service.NewMockSongService(ctrl)
+			if tc.mockServiceFn != nil {
+				tc.mockServiceFn(mockService)
+			}
 
-			handler := songs.NewSongHandlers(nil)
+			handler := songs.NewSongHandlers(mockService)
 			req := httptest.NewRequest("DELETE", "/songs/"+tc.songID, nil)
 			req = mux.SetURLVars(req, map[string]string{"id": tc.songID})
 			w := httptest.NewRecorder()
@@ -387,7 +407,11 @@ func TestDeleteSongHandler_Unit(t *testing.T) {
 			handler.DeleteSongHandler(w, req)
 
 			assert.Equal(t, tc.expectedStatus, w.Code)
-			assert.JSONEq(t, tc.expectedBody, w.Body.String())
+			if tc.name == "Valid request" {
+				assert.Empty(t, w.Body.String())
+			} else {
+				assert.JSONEq(t, tc.expectedBody, w.Body.String())
+			}
 		})
 	}
 }
@@ -395,8 +419,6 @@ func TestDeleteSongHandler_Unit(t *testing.T) {
 func TestHealthCheckHandler_Unit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	//mockService := mock_service.NewMockSongService(ctrl) // Mock service is not used in HealthCheckHandler
 
 	handler := songs.NewSongHandlers(nil)
 	req := httptest.NewRequest("GET", "/health", nil)

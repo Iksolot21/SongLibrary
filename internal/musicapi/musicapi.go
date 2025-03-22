@@ -18,21 +18,39 @@ type MusicAPI interface {
 }
 
 type MusicAPIClient struct {
-	baseURL string
-	client  *http.Client
+	baseURL     string
+	client      *http.Client
+	useMockData bool
 }
 
 func NewMusicAPIClient(baseURL string) *MusicAPIClient {
+	useMockData := baseURL == ""
+	if useMockData {
+		utils.Logger.Info("MusicAPIClient initialized in mock data mode because API_URL is not configured.")
+	} else {
+		utils.Logger.Info("MusicAPIClient initialized with API_URL", zap.String("url", baseURL))
+	}
+
 	return &MusicAPIClient{
-		baseURL: baseURL,
-		client:  &http.Client{},
+		baseURL:     baseURL,
+		client:      &http.Client{},
+		useMockData: useMockData,
 	}
 }
 
 func (api *MusicAPIClient) GetSongDetailsFromAPI(group string, song string) (*models.SongDetailFromAPI, error) {
+	if api.useMockData {
+		utils.Logger.Debug("MusicAPIClient is in mock data mode. Returning mock data.")
+		mockSongDetails := new(models.SongDetailFromAPI)
+		mockSongDetails.ReleaseDate = "2023-10-27"
+		mockSongDetails.Text = fmt.Sprintf("Mock Text: This is a sample verse for '%s' by '%s'.\n\n(Data from Mock MusicAPIClient)", song, group)
+		mockSongDetails.Link = "https://www.youtube.com/watch?v=mockExample"
+		return mockSongDetails, nil
+	}
+
 	apiURL := api.baseURL
 	if apiURL == "" {
-		return nil, fmt.Errorf("API_URL not configured in .env file")
+		return nil, fmt.Errorf("API_URL not configured and mock data mode is not active, which should not happen")
 	}
 
 	u, err := url.Parse(apiURL)

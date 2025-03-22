@@ -16,23 +16,39 @@ definitions:
       id:
         type: integer
       link:
+        description: swagger:strfmt uri
         type: string
       releaseDate:
+        description: swagger:strfmt date-time
         type: string
       song:
         type: string
       text:
+        description: swagger:strfmt string
         type: string
       updatedAt:
         type: string
     type: object
-host: localhost:8081
+host: localhost:8080
 info:
   contact: {}
   description: This is a sample online library API for songs.
   title: Online Library API
   version: "1.0"
 paths:
+  /health:
+    get:
+      description: Get the status of server.
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Show the status of server.
+      tags:
+      - root
   /songs:
     get:
       description: Get songs with optional filters for group and song name, and pagination.
@@ -161,12 +177,22 @@ paths:
       - songs
   /songs/{id}/text:
     get:
-      description: Get the text of a song by its ID.
+      description: Get the text of a song by its ID, with pagination for verses.
       parameters:
       - description: Song ID
         in: path
         name: id
         required: true
+        type: integer
+      - default: 1
+        description: Page number for verses
+        in: query
+        name: page
+        type: integer
+      - default: 1
+        description: Number of verses per page
+        in: query
+        name: pageSize
         type: integer
       produces:
       - application/json
@@ -183,7 +209,7 @@ paths:
           description: Internal Server Error
           schema:
             type: string
-      summary: Get song text by ID
+      summary: Get song text by ID with pagination
       tags:
       - songs
 schemes:

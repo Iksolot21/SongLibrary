@@ -14,23 +14,37 @@ import (
 	"go.uber.org/zap"
 )
 
+//go:generate mockgen -destination=mocks/mock_service.go -package=mocks songlibrary/internal/service SongService
+
 var (
 	ErrExternalAPI = errors.New("external API error")
 )
 
-type SongService struct {
+// SongService interface defines the methods for song operations.
+type SongService interface {
+	AddSong(ctx context.Context, req *models.AddSongRequest) (*models.Song, error)
+	GetSongs(ctx context.Context, filter *models.SongFilter, pagination *models.Pagination) ([]models.Song, error)
+	GetSongText(ctx context.Context, id int, pagination *models.Pagination) (*models.Song, error)
+	UpdateSong(ctx context.Context, song *models.Song) (*models.Song, error)
+	DeleteSong(ctx context.Context, id int) error
+}
+
+// songService is the concrete implementation of SongService interface.
+type songService struct {
 	storage        storage.SongStorage
 	musicAPIClient musicapi.MusicAPI
 }
 
-func NewSongService(storage storage.SongStorage, musicAPIClient musicapi.MusicAPI) *SongService {
-	return &SongService{
+// NewSongService creates a new SongService instance.
+// It returns the interface SongService, allowing for dependency injection and mocking.
+func NewSongService(storage storage.SongStorage, musicAPIClient musicapi.MusicAPI) SongService {
+	return &songService{ // Return concrete songService instance, but as SongService interface
 		storage:        storage,
 		musicAPIClient: musicAPIClient,
 	}
 }
 
-func (s *SongService) AddSong(ctx context.Context, req *models.AddSongRequest) (*models.Song, error) {
+func (s *songService) AddSong(ctx context.Context, req *models.AddSongRequest) (*models.Song, error) {
 	utils.Logger.Debug("SongService.AddSong", zap.String("group", req.GroupName), zap.String("song", req.SongName))
 
 	songDetails, err := s.musicAPIClient.GetSongDetailsFromAPI(req.GroupName, req.SongName)
@@ -50,20 +64,6 @@ func (s *SongService) AddSong(ctx context.Context, req *models.AddSongRequest) (
 		return nil, fmt.Errorf("releaseDate length exceeds maximum allowed length (%d)", maxReleaseDateLength)
 	}
 
-	// Start a transaction
-	tx, err := s.storage.BeginTx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start transaction: %w", err)
-	}
-
-	defer func() {
-		if err != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				utils.Logger.Error("Transaction rollback failed", zap.Error(rollbackErr))
-			}
-		}
-	}()
-
 	nullReleaseDate := sql.NullString{String: songDetails.ReleaseDate, Valid: songDetails.ReleaseDate != ""}
 	nullText := sql.NullString{String: songDetails.Text, Valid: songDetails.Text != ""}
 	nullLink := sql.NullString{String: songDetails.Link, Valid: songDetails.Link != ""}
@@ -76,21 +76,17 @@ func (s *SongService) AddSong(ctx context.Context, req *models.AddSongRequest) (
 		Link:        nullLink,
 	}
 
-	addedSong, err := s.storage.Create(ctx, newSong, tx)
+	addedSong, err := s.storage.Create(ctx, newSong, nil)
 	if err != nil {
 		utils.Logger.Error("SongService.AddSong - storage.Create failed", zap.Error(err))
 		return nil, fmt.Errorf("SongService.AddSong - storage.Create failed: %w", err)
-	}
-
-	if err = tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	utils.Logger.Info("SongService.AddSong - song added", zap.Int("song_id", addedSong.ID), zap.String("group", req.GroupName), zap.String("song", req.SongName))
 	return addedSong, nil
 }
 
-func (s *SongService) GetSongs(ctx context.Context, filter *models.SongFilter, pagination *models.Pagination) ([]models.Song, error) {
+func (s *songService) GetSongs(ctx context.Context, filter *models.SongFilter, pagination *models.Pagination) ([]models.Song, error) {
 	utils.Logger.Debug("SongService.GetSongs", zap.Any("filter", filter), zap.Any("pagination", pagination))
 
 	songs, err := s.storage.List(ctx, filter, pagination)
@@ -101,7 +97,7 @@ func (s *SongService) GetSongs(ctx context.Context, filter *models.SongFilter, p
 	return songs, nil
 }
 
-func (s *SongService) GetSongText(ctx context.Context, id int, pagination *models.Pagination) (*models.Song, error) {
+func (s *songService) GetSongText(ctx context.Context, id int, pagination *models.Pagination) (*models.Song, error) {
 	utils.Logger.Debug("SongService.GetSongText", zap.Int("id", id), zap.Any("pagination", pagination))
 
 	song, err := s.storage.GetByID(ctx, id)
@@ -133,7 +129,7 @@ func (s *SongService) GetSongText(ctx context.Context, id int, pagination *model
 	return song, nil
 }
 
-func (s *SongService) UpdateSong(ctx context.Context, song *models.Song) (*models.Song, error) {
+func (s *songService) UpdateSong(ctx context.Context, song *models.Song) (*models.Song, error) {
 	utils.Logger.Debug("SongService.UpdateSong", zap.Int("id", song.ID), zap.String("group", song.GroupName), zap.String("song", song.SongName))
 
 	updatedSong, err := s.storage.Update(ctx, song)
@@ -148,7 +144,7 @@ func (s *SongService) UpdateSong(ctx context.Context, song *models.Song) (*model
 	return updatedSong, nil
 }
 
-func (s *SongService) DeleteSong(ctx context.Context, id int) error {
+func (s *songService) DeleteSong(ctx context.Context, id int) error {
 	utils.Logger.Debug("SongService.DeleteSong", zap.Int("id", id))
 
 	err := s.storage.Delete(ctx, id)

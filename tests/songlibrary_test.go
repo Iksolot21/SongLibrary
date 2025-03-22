@@ -1,4 +1,5 @@
-// tests/songlibrary_test.go
+//go:build integration
+
 package tests
 
 import (
@@ -14,6 +15,9 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
@@ -29,16 +33,18 @@ import (
 	"songlibrary/internal/service"
 	"songlibrary/internal/storage"
 	"songlibrary/internal/storage/postgres"
+	integration "songlibrary/tests/integration_test"
 )
 
 var (
-	testDBConnStr  string
-	testServer     *httptest.Server
-	testRouter     *mux.Router
-	pgStorage      storage.SongStorage
-	musicAPIClient *musicapi.MusicAPIClient
-	songHandlers   *songs.SongHandlers
-	songService    *service.SongService
+	testDBConnStr         string
+	testServer            *httptest.Server
+	testRouter            *mux.Router
+	pgStorage             storage.SongStorage
+	musicAPIClient        *musicapi.MusicAPIClient
+	songHandlers          *songs.SongHandlers
+	songService           service.SongService
+	testPostgresContainer *integration.PostgreSQLContainer
 )
 
 func setupTestEnvironment(t *testing.T) func() {
@@ -47,11 +53,25 @@ func setupTestEnvironment(t *testing.T) func() {
 	cfg, err := config.LoadConfig()
 	require.NoError(t, err, "Failed to load config")
 
-	testDBConnStr = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName+"_test")
+	ctx := context.Background()
+	testPostgresContainer, err = integration.NewPostgreSQLContainer(ctx, integration.PostgreSQLContainerOption(func(c *integration.PostgreSQLContainerConfig) {
+		c.Database = "songlibrary_test"
+		c.User = cfg.DBUser
+		c.Password = cfg.DBPassword
+	}))
+	require.NoError(t, err, "Failed to start test контейнер")
+
+	testDBConnStr = testPostgresContainer.ConnectionString()
+	utils.Logger.Info("Test database connection string", zap.String("conn", testDBConnStr))
 
 	conn, err := pgx.Connect(context.Background(), testDBConnStr)
 	require.NoError(t, err, "Failed to connect to test database")
+
+	if err := runMigrations(testDBConnStr); err != nil {
+		utils.Logger.Fatal("Database migration failed", zap.Error(err))
+		return nil
+	}
+	utils.Logger.Info("Database migrations completed successfully for test DB")
 
 	pgStorage = postgres.NewPgStorage(conn)
 	musicAPIClient = musicapi.NewMusicAPIClient(cfg.APIURL)
@@ -68,11 +88,15 @@ func setupTestEnvironment(t *testing.T) func() {
 
 	testServer = httptest.NewServer(testRouter)
 
-	// Clean up database after tests
 	return func() {
 		conn.Close(context.Background())
 		cleanupTestData(t)
 		testServer.Close()
+		if testPostgresContainer != nil {
+			if err := testPostgresContainer.Terminate(context.Background()); err != nil {
+				utils.Logger.Error("Failed to terminate container", zap.Error(err))
+			}
+		}
 	}
 }
 
@@ -106,7 +130,6 @@ func TestGetSongsHandler_Integration(t *testing.T) {
 	teardown := setupTestEnvironment(t)
 	defer teardown()
 
-	// Add test data directly to DB
 	addTestData(t)
 
 	recorder := executeRequest(t, "GET", "/songs", "")
@@ -231,4 +254,18 @@ func TestMain(m *testing.M) {
 	exitCode := m.Run()
 	utils.Logger.Info("Integration Tests Finished", zap.Int("exit_code", exitCode))
 	os.Exit(exitCode)
+}
+
+func runMigrations(dbURL string) error {
+	migrationSourceURL := "file://../internal/migrations"
+	m, err := migrate.New(migrationSourceURL, dbURL)
+	if err != nil {
+		return fmt.Errorf("failed to initialize migration: %w", err)
+	}
+
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	return nil
 }

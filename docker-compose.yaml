@@ -9,8 +9,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://user:password@db:5432/songlibrary?sslmode=disable 
     command: sh -c "./songlibrary"
   
   db:

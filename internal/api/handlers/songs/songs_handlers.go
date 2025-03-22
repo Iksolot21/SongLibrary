@@ -17,10 +17,10 @@ import (
 )
 
 type SongHandlers struct {
-	songService *service.SongService
+	songService service.SongService
 }
 
-func NewSongHandlers(songService *service.SongService) *SongHandlers {
+func NewSongHandlers(songService service.SongService) *SongHandlers {
 	return &SongHandlers{
 		songService: songService,
 	}
@@ -177,7 +177,7 @@ func (h *SongHandlers) UpdateSongHandler(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	updatedSongData.ID = id // Ensure ID from path is used
+	updatedSongData.ID = id
 
 	updatedSong, err := h.songService.UpdateSong(r.Context(), &updatedSongData)
 	if err != nil {

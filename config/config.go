@@ -45,7 +45,7 @@ func LoadConfig() (*Config, error) {
 		dbPassword := os.Getenv("DB_PASSWORD")
 		dbName := os.Getenv("DB_NAME")
 
-		dbURL = fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", dbUser, dbPassword, dbHost, dbPort, dbName) // Используем dbPort, объявленный выше
+		dbURL = fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", dbUser, dbPassword, dbHost, dbPort, dbName)
 	}
 
 	parsedDBURL, err := url.Parse(dbURL)

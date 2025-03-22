@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log"
+	"os"
 	"strings"
 	"testing"
 
+	"songlibrary/internal/lib/logger/utils"
 	"songlibrary/internal/models"
 	mock_musicapi "songlibrary/internal/musicapi/mocks"
 	"songlibrary/internal/service"
@@ -17,12 +20,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestMain(m *testing.M) {
+	if err := utils.InitLogger(); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	exitCode := m.Run()
+	utils.Logger.Sync()
+	os.Exit(exitCode)
+}
+
 func TestSongService_AddSong(t *testing.T) {
 	testCases := []struct {
 		name           string
 		request        *models.AddSongRequest
-		mockStorageFn  func(s *mock_storage.MockSongStorage)
 		mockMusicAPIFn func(m *mock_musicapi.MockMusicAPI)
+		mockStorageFn  func(m *mock_storage.MockSongStorage)
 		expectError    bool
 	}{
 		{
@@ -31,12 +43,11 @@ func TestSongService_AddSong(t *testing.T) {
 				GroupName: "Test Group",
 				SongName:  "Test Song",
 			},
-			mockStorageFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().BeginTx(gomock.Any()).Return(&sql.Tx{}, nil)
-				s.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any()).Return(&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song"}, nil)
-			},
 			mockMusicAPIFn: func(m *mock_musicapi.MockMusicAPI) {
 				m.EXPECT().GetSongDetailsFromAPI("Test Group", "Test Song").Return(&models.SongDetailFromAPI{Text: "Test Text", ReleaseDate: "2023-01-01", Link: "http://test.link"}, nil)
+			},
+			mockStorageFn: func(m *mock_storage.MockSongStorage) {
+				m.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any()).Return(&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song"}, nil) // Исправлено: добавлен третий аргумент gomock.Any()
 			},
 			expectError: false,
 		},
@@ -46,9 +57,10 @@ func TestSongService_AddSong(t *testing.T) {
 				GroupName: "Test Group",
 				SongName:  "Test Song",
 			},
-			mockStorageFn: func(s *mock_storage.MockSongStorage) {},
 			mockMusicAPIFn: func(m *mock_musicapi.MockMusicAPI) {
 				m.EXPECT().GetSongDetailsFromAPI("Test Group", "Test Song").Return(nil, errors.New("music api error"))
+			},
+			mockStorageFn: func(m *mock_storage.MockSongStorage) {
 			},
 			expectError: true,
 		},
@@ -58,12 +70,11 @@ func TestSongService_AddSong(t *testing.T) {
 				GroupName: "Test Group",
 				SongName:  "Test Song",
 			},
-			mockStorageFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().BeginTx(gomock.Any()).Return(&sql.Tx{}, nil)
-				s.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("storage error"))
-			},
 			mockMusicAPIFn: func(m *mock_musicapi.MockMusicAPI) {
 				m.EXPECT().GetSongDetailsFromAPI("Test Group", "Test Song").Return(&models.SongDetailFromAPI{Text: "Test Text", ReleaseDate: "2023-01-01", Link: "http://test.link"}, nil)
+			},
+			mockStorageFn: func(m *mock_storage.MockSongStorage) {
+				m.EXPECT().Create(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("storage error"))
 			},
 			expectError: true,
 		},
@@ -73,10 +84,11 @@ func TestSongService_AddSong(t *testing.T) {
 				GroupName: "Test Group",
 				SongName:  "Test Song",
 			},
-			mockStorageFn: func(s *mock_storage.MockSongStorage) {},
 			mockMusicAPIFn: func(m *mock_musicapi.MockMusicAPI) {
 				longText := strings.Repeat("A", 65536)
 				m.EXPECT().GetSongDetailsFromAPI("Test Group", "Test Song").Return(&models.SongDetailFromAPI{Text: longText, ReleaseDate: "2023-01-01", Link: "http://test.link"}, nil)
+			},
+			mockStorageFn: func(m *mock_storage.MockSongStorage) {
 			},
 			expectError: true,
 		},
@@ -90,8 +102,8 @@ func TestSongService_AddSong(t *testing.T) {
 			mockStorage := mock_storage.NewMockSongStorage(ctrl)
 			mockMusicAPIClient := mock_musicapi.NewMockMusicAPI(ctrl)
 
-			tc.mockStorageFn(mockStorage)
 			tc.mockMusicAPIFn(mockMusicAPIClient)
+			tc.mockStorageFn(mockStorage)
 
 			serviceInstance := service.NewSongService(mockStorage, mockMusicAPIClient)
 
@@ -181,10 +193,10 @@ func TestSongService_GetSongText(t *testing.T) {
 			songID:     1,
 			pagination: models.NewPagination(1, 10),
 			mockStorageFn: func(s *mock_storage.MockSongStorage) {
-				s.EXPECT().GetByID(gomock.Any(), 1).Return(&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sql.NullString{String: "Test Text", Valid: true}}, nil)
+				s.EXPECT().GetByID(gomock.Any(), 1).Return(&models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sqlStringPointer("Test Text")}, nil)
 			},
 			expectError:  false,
-			expectedSong: &models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sql.NullString{String: "Test Text", Valid: true}},
+			expectedSong: &models.Song{ID: 1, GroupName: "Test Group", SongName: "Test Song", Text: sqlStringPointer("Test Text")},
 		},
 		{
 			name:       "Song not found",
