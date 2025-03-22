@@ -102,6 +102,10 @@ func runMigrations(dbURL string) error {
 		return fmt.Errorf("failed to initialize migration: %w", err)
 	}
 
+	if err := m.Down(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}

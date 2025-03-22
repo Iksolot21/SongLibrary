@@ -1,0 +1,43 @@
+diff --git a/.env b/.env
+index 1c1022a..40414a9 100644
+--- a/.env
++++ b/.env
+@@ -1,3 +1,3 @@
+-API_URL=
++API_URL=http://172.18.0.1:8000
+ SERVER_PORT=8080
+-DATABASE_URL=postgres://user:password@db:5432/songlibrary?sslmode=disable
+\ No newline at end of file
++DATABASE_URL=postgres://user:password@db:5432/songlibrary?sslmode=disable
+diff --git a/cmd/songlibrary/main.go b/cmd/songlibrary/main.go
+index 733225c..eb49e17 100644
+--- a/cmd/songlibrary/main.go
++++ b/cmd/songlibrary/main.go
+@@ -102,6 +102,10 @@ func runMigrations(dbURL string) error {
+ 		return fmt.Errorf("failed to initialize migration: %w", err)
+ 	}
+ 
++	if err := m.Down(); err != nil && err != migrate.ErrNoChange {
++		return fmt.Errorf("failed to run migrations: %w", err)
++	}
++
+ 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+ 		return fmt.Errorf("failed to run migrations: %w", err)
+ 	}
+diff --git a/internal/migrations/0001_create_songs_table.up.sql b/internal/migrations/0001_create_songs_table.up.sql
+index 2236376..5544568 100644
+--- a/internal/migrations/0001_create_songs_table.up.sql
++++ b/internal/migrations/0001_create_songs_table.up.sql
+@@ -1,5 +1,3 @@
+-DROP TABLE IF EXISTS songs;
+-
+ CREATE TABLE IF NOT EXISTS songs (
+     id SERIAL PRIMARY KEY,
+     group_name VARCHAR(255) NOT NULL,
+@@ -14,4 +12,4 @@ CREATE TABLE IF NOT EXISTS songs (
+ );
+ 
+ CREATE INDEX IF NOT EXISTS idx_songs_group_name ON songs (group_name);
+-CREATE INDEX IF NOT EXISTS idx_songs_song_name ON songs (song_name);
+\ No newline at end of file
++CREATE INDEX IF NOT EXISTS idx_songs_song_name ON songs (song_name);
