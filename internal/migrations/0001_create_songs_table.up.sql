@@ -6,7 +6,9 @@ CREATE TABLE IF NOT EXISTS songs (
     text TEXT,
     link VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT unique_song_group UNIQUE (group_name, song_name)
 );
 
 CREATE INDEX IF NOT EXISTS idx_songs_group_name ON songs (group_name);

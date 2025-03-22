@@ -68,15 +68,15 @@ func (s *songService) AddSong(ctx context.Context, req *models.AddSongRequest) (
 	// Parse and format releaseDate to YYYY-MM-DD for PostgreSQL DATE type
 	var nullReleaseDate sql.NullString
 	if songDetails.ReleaseDate != "" {
-		parsedTime, parseErr := time.Parse("02.01.2006", songDetails.ReleaseDate) // Parse from DD.MM.YYYY
+		parsedTime, parseErr := time.Parse("02.01.2006", songDetails.ReleaseDate)
 		if parseErr != nil {
 			utils.Logger.Warn("SongService.AddSong - Failed to parse releaseDate from API, using empty date", zap.Error(parseErr), zap.String("releaseDate", songDetails.ReleaseDate))
-			nullReleaseDate = sql.NullString{String: "", Valid: false} // Use empty date if parsing fails
+			nullReleaseDate = sql.NullString{String: "", Valid: false}
 		} else {
-			nullReleaseDate = sql.NullString{String: parsedTime.Format("2006-01-02"), Valid: true} // Format to YYYY-MM-DD
+			nullReleaseDate = sql.NullString{String: parsedTime.Format("2006-01-02"), Valid: true}
 		}
 	} else {
-		nullReleaseDate = sql.NullString{String: "", Valid: false} // Keep empty if no releaseDate from API
+		nullReleaseDate = sql.NullString{String: "", Valid: false}
 	}
 
 	nullText := sql.NullString{String: songDetails.Text, Valid: songDetails.Text != ""}
